@@ -1,0 +1,147 @@
+
+
+# DC-Masters Container Toolkit
+# Supports both Docker and Podman
+
+services:
+  # PostgreSQL with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: dc-masters-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-dcmasters}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme123}
+      - POSTGRES_DB=${POSTGRES_DB:-litellm}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data:Z
+      - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro,Z
+    ports:
+      - "5432:5432"
+    networks:
+      - toolkit-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dcmasters}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # LiteLLM AI Gateway
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: dc-masters-litellm
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - AZURE_API_KEY=${AZURE_API_KEY}
+      - AZURE_API_BASE=${AZURE_API_BASE}
+      - AZURE_API_VERSION=${AZURE_API_VERSION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION_NAME=${AWS_REGION_NAME}
+      - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      - GCP_REGION=${GCP_REGION}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+    volumes:
+      - ./config/litellm:/app/config:ro,Z
+    ports:
+      - "4000:4000"
+    networks:
+      - toolkit-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["--config", "/app/config/config.yaml"]
+    restart: unless-stopped
+
+  # N8N Workflow Automation
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: dc-masters-n8n
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE:-true}
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-changeme123}
+      - DB_TYPE=${DB_TYPE:-postgresdb}
+      - DB_POSTGRESDB_HOST=${DB_POSTGRESDB_HOST:-postgres}
+      - DB_POSTGRESDB_PORT=${DB_POSTGRESDB_PORT:-5432}
+      - DB_POSTGRESDB_DATABASE=${DB_POSTGRESDB_DATABASE:-n8n}
+      - DB_POSTGRESDB_USER=${DB_POSTGRESDB_USER:-dcmasters}
+      - DB_POSTGRESDB_PASSWORD=${DB_POSTGRESDB_PASSWORD:-changeme123}
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Asia/Singapore}
+      - TZ=${TZ:-Asia/Singapore}
+      - NODE_FUNCTION_ALLOW_EXTERNAL=pdf-parse
+    volumes:
+      - ./data/n8n:/home/node/.n8n:Z
+      - ./config/n8n/package.json:/data/package.json:ro,Z
+    ports:
+      - "5678:5678"
+    networks:
+      - toolkit-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # MCP Filesystem Server
+  mcp-filesystem:
+    build:
+      context: ./mcp-servers/filesystem
+    container_name: dc-masters-mcp-filesystem
+    environment:
+      - MCP_TRANSPORT=http
+      - MCP_PORT=8000
+    volumes:
+      - ./data/sandbox:/projects:Z
+    ports:
+      - "8000:8000"
+    networks:
+      - toolkit-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # MCP DuckDuckGo Server
+  mcp-duckduckgo:
+    build:
+      context: ./mcp-servers/duckduckgo
+    container_name: dc-masters-mcp-duckduckgo
+    environment:
+      - MCP_TRANSPORT=http
+      - MCP_PORT=8001
+    ports:
+      - "8001:8001"
+    networks:
+      - toolkit-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # N8N Workflow Import (Init Container)
+  n8n-init:
+    image: n8nio/n8n:latest
+    container_name: dc-masters-n8n-init
+    environment:
+      - N8N_HOST=n8n
+      - N8N_PORT=5678
+    volumes:
+      - ./workflows:/workflows:ro,Z
+      - ./data/n8n:/home/node/.n8n:Z
+      - ./config/n8n/import-workflows.sh:/import-workflows.sh:ro,Z
+    networks:
+      - toolkit-network
+    depends_on:
+      n8n:
+        condition: service_started
+    entrypoint: ["/bin/sh", "/import-workflows.sh"]
+    restart: "no"
+
+networks:
+  toolkit-network:
+    driver: bridge

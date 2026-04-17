@@ -1,0 +1,8 @@
+{
+  "name": "n8n-custom-packages",
+  "version": "1.0.0",
+  "description": "Custom packages for N8N workflows",
+  "dependencies": {
+    "pdf-parse": "^1.1.1"
+  }
+}

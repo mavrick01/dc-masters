@@ -1,0 +1,78 @@
+# DC-Masters Container Toolkit - LiteLLM Configuration
+
+# General settings
+general_settings:
+  database_url: ${DATABASE_URL}
+  master_key: ${LITELLM_MASTER_KEY}
+  store_model_in_db: true
+
+# Model configurations
+model_list:
+  # Azure OpenAI - GPT Models
+  - model_name: gpt-4
+    litellm_params:
+      model: azure/gpt-4
+      api_base: ${AZURE_API_BASE}
+      api_key: ${AZURE_API_KEY}
+      api_version: ${AZURE_API_VERSION}
+
+  - model_name: gpt-35-turbo
+    litellm_params:
+      model: azure/gpt-35-turbo
+      api_base: ${AZURE_API_BASE}
+      api_key: ${AZURE_API_KEY}
+      api_version: ${AZURE_API_VERSION}
+
+  # AWS Bedrock - Claude Models
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0
+      aws_access_key_id: ${AWS_ACCESS_KEY_ID}
+      aws_secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+      aws_region_name: ${AWS_REGION_NAME}
+
+  - model_name: claude-3-opus
+    litellm_params:
+      model: bedrock/anthropic.claude-3-opus-20240229-v1:0
+      aws_access_key_id: ${AWS_ACCESS_KEY_ID}
+      aws_secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+      aws_region_name: ${AWS_REGION_NAME}
+
+  # Vertex AI - Gemini Models
+  - model_name: gemini-2-5-flash
+    litellm_params:
+      model: vertex_ai/gemini-2.5-flash
+      vertex_project: ${GCP_PROJECT_ID}
+      vertex_location: ${GCP_REGION}
+
+  - model_name: gemini-2-0-flash
+    litellm_params:
+      model: vertex_ai/gemini-2.0-flash
+      vertex_project: ${GCP_PROJECT_ID}
+      vertex_location: ${GCP_REGION}
+
+  # Vertex AI - Embeddings
+  - model_name: text-embedding-004
+    litellm_params:
+      model: vertex_ai/text-embedding-004
+      vertex_project: ${GCP_PROJECT_ID}
+      vertex_location: ${GCP_REGION}
+
+# MCP Server Configuration
+mcp_servers:
+  filesystem:
+    url: "http://mcp-filesystem:8000/mcp"
+    transport: "http"
+    alias: "fs"
+
+  duckduckgo:
+    url: "http://mcp-duckduckgo:8001/mcp"
+    transport: "http"
+    alias: "search"
+
+# Logging configuration
+litellm_settings:
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+  set_verbose: true
+  drop_params: true

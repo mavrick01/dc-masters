@@ -1,0 +1,27 @@
+# Environment variables
+.env
+
+# Data directories
+data/postgres/
+data/n8n/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Service account files
+*.json
+!config/n8n/package.json
+
+# Temporary files
+*.tmp
+*.bak

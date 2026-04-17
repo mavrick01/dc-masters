@@ -1,0 +1,17 @@
+Welcome to DC-Masters Container Toolkit!
+
+This is an example document that demonstrates the embedding workflow.
+
+Key Features:
+- LiteLLM provides unified access to GPT (Azure), Claude (AWS Bedrock), and Gemini (Vertex AI)
+- N8N enables workflow automation for AI pipelines
+- PostgreSQL with pgvector stores document embeddings for semantic search
+- MCP servers provide tools for filesystem access and web search
+
+Example Use Cases:
+1. Retrieval Augmented Generation (RAG) - answer questions based on your documents
+2. Document embedding - automatically process and index new documents
+3. Multi-model AI agents - switch between different LLMs seamlessly
+4. Web-augmented responses - combine local knowledge with real-time web search
+
+Try querying this document using the AI agent workflows after it has been embedded!
