@@ -59,6 +59,18 @@ A comprehensive containerized toolkit for DC-Masters students to learn and demon
 - **Google Cloud Account**: With Vertex AI API enabled (required for embeddings and Gemini)
 - **Optional**: Azure OpenAI access (for GPT models) and/or AWS Bedrock access (for Claude models)
 - **System Resources**: Minimum 4GB RAM, 10GB disk space
+- **Network**: Internet access for API calls and container image downloads
+
+### Corporate Firewall Users
+
+If you're behind a corporate firewall with SSL inspection or proxy requirements, see [CORPORATE_FIREWALL.md](CORPORATE_FIREWALL.md) for configuration instructions.
+
+**Quick fix**: Add to your `.env` file:
+```bash
+NODE_TLS_REJECT_UNAUTHORIZED=0
+HTTP_PROXY=http://your-proxy:8080
+HTTPS_PROXY=http://your-proxy:8080
+```
 
 ## Quick Start
 
@@ -82,7 +94,7 @@ nano .env  # or use your preferred editor
 ### 2. Start the Toolkit
 
 ```bash
-# Start all services
+# Start all services (infrastructure only)
 ./start-toolkit.sh start
 
 # Wait 2-3 minutes for initialization
@@ -90,7 +102,36 @@ nano .env  # or use your preferred editor
 ./start-toolkit.sh logs
 ```
 
-### 3. Access Services
+### 3. Configure the Toolkit
+
+```bash
+# Configure LiteLLM models, virtual keys, and N8N credentials
+./configure-toolkit.sh
+```
+
+This will automatically:
+- ✅ Read model definitions from `config/litellm/config.yaml`
+- ✅ Add AI models to LiteLLM (Vertex AI Gemini, Azure GPT, AWS Claude)
+- ✅ Configure MCP servers (filesystem, duckduckgo)
+- ✅ Create a virtual key in LiteLLM for N8N to use
+- ✅ Create N8N credentials (Google Cloud, PostgreSQL, LiteLLM)
+- ✅ Import N8N workflows (all 5 workflows imported via API)
+
+**Note**: You can re-run `./configure-toolkit.sh` anytime to reconfigure or add more models/credentials.
+
+**Adding Custom Models**: Edit `config/litellm/config.yaml` to add or modify models, then run `./configure-toolkit.sh` to apply changes.
+
+**Reset Configuration**: To undo all changes made by `configure-toolkit.sh`:
+```bash
+./configure-toolkit.sh clean
+```
+This removes all models, virtual keys, credentials, and workflows, allowing you to start fresh.
+
+**Alternative**: Configure manually via UIs:
+- LiteLLM: http://localhost:4000 (see [LITELLM_SETUP.md](LITELLM_SETUP.md))
+- N8N: http://localhost:5678 (see [WORKFLOW_SETUP.md](WORKFLOW_SETUP.md))
+
+### 4. Access Services
 
 - **N8N UI**: http://localhost:5678
   - Username: `admin` (or your configured value)
@@ -269,6 +310,20 @@ LIMIT 5;
 
 ## Troubleshooting
 
+### LiteLLM SSL Certificate Warning
+
+**Symptom**: LiteLLM logs show:
+```
+LiteLLM: Failed to fetch remote model cost map... [SSL: CERTIFICATE_VERIFY_FAILED]
+certificate verify failed: self-signed certificate in certificate chain
+```
+
+**Impact**: None - LiteLLM automatically falls back to local model cost map. This is a harmless warning in corporate firewall environments.
+
+**To suppress the warning** (optional):
+1. Add to `.env`: `SSL_VERIFY=false`
+2. Or, see [CORPORATE_FIREWALL.md](CORPORATE_FIREWALL.md) for CA certificate configuration
+
 ### Services Not Starting
 
 ```bash
@@ -338,6 +393,12 @@ npm install pdf-parse
 
 # Clean everything
 ./start-toolkit.sh clean
+
+# Configure models, keys, credentials, workflows
+./configure-toolkit.sh
+
+# Reset configuration (remove models, keys, credentials, workflows)
+./configure-toolkit.sh clean
 ```
 
 ## Security Considerations

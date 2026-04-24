@@ -28,7 +28,10 @@ Before configuring workflows, ensure you have:
 ### 1.1 Access N8N
 
 1. Navigate to http://localhost:5678
-2. Log in with credentials from `.env` (default: admin / changeme123)
+2. Log in with credentials from `.env`:
+   - Default email: `admin@dcmasters.local`
+   - Default password: `changeme123`
+   - **Note**: This account is auto-created on first startup - no registration needed!
 
 ### 1.2 Create Google Cloud Credential
 

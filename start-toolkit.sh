@@ -44,15 +44,20 @@ if [ "$RUNTIME" = "docker" ]; then
         exit 1
     fi
 else
-    COMPOSE_CMD="podman-compose"
+    COMPOSE_CMD="podman compose"
     if ! command -v podman &> /dev/null; then
         print_error "Podman is not installed or not in PATH"
         exit 1
     fi
-    if ! command -v podman-compose &> /dev/null; then
-        print_error "podman-compose is not installed or not in PATH"
-        print_info "Install with: pip install podman-compose"
-        exit 1
+    # Check if podman compose works
+    if ! podman compose version &> /dev/null; then
+        print_warn "podman compose not available, trying podman-compose..."
+        COMPOSE_CMD="podman-compose"
+        if ! command -v podman-compose &> /dev/null; then
+            print_error "Neither 'podman compose' nor 'podman-compose' is available"
+            print_info "Install with: pip install podman-compose"
+            exit 1
+        fi
     fi
 fi
 
@@ -63,6 +68,41 @@ print_info "Using compose command: $COMPOSE_CMD"
 start_services() {
     print_info "Creating data directories..."
     mkdir -p data/{postgres,n8n,sandbox/{import,shared}}
+    mkdir -p credentials
+    mkdir -p certs
+
+    # Copy Google Cloud credentials if specified
+    if [ -n "$GOOGLE_APPLICATION_CREDENTIALS" ] && [ -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+        print_info "Copying Google Cloud credentials to credentials directory..."
+        cp "$GOOGLE_APPLICATION_CREDENTIALS" credentials/google_credentials.json
+        # Set readable permissions for containers
+        chmod 644 credentials/google_credentials.json
+        print_info "✓ Credentials copied successfully"
+    elif [ -n "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+        print_warn "GOOGLE_APPLICATION_CREDENTIALS is set but file not found: $GOOGLE_APPLICATION_CREDENTIALS"
+        print_warn "LiteLLM and N8N will not be able to access Vertex AI"
+    else
+        print_warn "GOOGLE_APPLICATION_CREDENTIALS not set in .env file"
+        print_warn "LiteLLM and N8N will not be able to access Vertex AI"
+    fi
+
+    # Check for corporate CA certificate
+    if [ -f "certs/company-ca.pem" ]; then
+        print_info "Corporate CA certificate detected: certs/company-ca.pem"
+        print_info "Configuring SSL certificate trust for LiteLLM and N8N..."
+
+        # Export certificate paths for containers
+        export REQUESTS_CA_BUNDLE=/app/certs/company-ca.pem
+        export CURL_CA_BUNDLE=/app/certs/company-ca.pem
+        export NODE_EXTRA_CA_CERTS=/app/certs/company-ca.pem
+        export SSL_CERT_FILE=/app/certs/company-ca.pem
+
+        print_info "✓ Corporate CA certificate will be trusted by services"
+    elif [ -d "certs" ] && [ -n "$(ls -A certs 2>/dev/null)" ]; then
+        print_warn "certs/ directory exists but company-ca.pem not found"
+        print_warn "To enable corporate firewall support, place your CA certificate at:"
+        print_warn "  certs/company-ca.pem"
+    fi
 
     print_info "Starting DC-Masters Container Toolkit..."
     $COMPOSE_CMD up -d
@@ -80,11 +120,64 @@ start_services() {
     print_info "  - MCP DuckDuckGo: http://localhost:8001"
     print_info ""
     print_info "Default credentials (change in .env):"
-    print_info "  - N8N: ${N8N_BASIC_AUTH_USER:-admin} / ${N8N_BASIC_AUTH_PASSWORD:-changeme123}"
+    print_info "  - N8N UI: ${N8N_OWNER_EMAIL:-admin@dcmasters.local} / ${N8N_OWNER_PASSWORD:-changeme123}"
+    print_info "  - LiteLLM UI: ${UI_USERNAME:-admin@dcmasters.local} / ${UI_PASSWORD:-changeme123}"
     print_info "  - PostgreSQL: ${POSTGRES_USER:-dcmasters} / ${POSTGRES_PASSWORD:-changeme123}"
     print_info ""
+    print_info "Note: N8N owner account will be created automatically"
     print_warn "Please wait a few minutes for all services to initialize..."
+
+    # Wait for N8N to be ready and create owner account
+    print_info "Waiting for N8N to be ready..."
+    MAX_WAIT=60
+    WAITED=0
+    while [ $WAITED -lt $MAX_WAIT ]; do
+        if curl -s -o /dev/null -w "%{http_code}" http://localhost:5678 | grep -q "200\|401\|403"; then
+            print_info "N8N is ready!"
+            break
+        fi
+        sleep 2
+        WAITED=$((WAITED + 2))
+    done
+
+    if [ $WAITED -ge $MAX_WAIT ]; then
+        print_warn "N8N did not become ready in time, skipping owner account creation"
+        print_warn "You may need to register manually at http://localhost:5678"
+    else
+        # Wait a bit longer for N8N to fully initialize
+        print_info "Waiting for N8N to fully initialize..."
+        sleep 10
+
+        # Create N8N owner account using SQL script
+        print_info "Creating N8N owner account..."
+
+        # Run SQL script in PostgreSQL container
+        CREATE_OUTPUT=$($RUNTIME exec -i dc-masters-postgres psql -U dcmasters -d n8n -f - < config/n8n/create-owner.sql 2>&1)
+
+        if echo "$CREATE_OUTPUT" | grep -q "NOTICE.*N8N Setup"; then
+            echo "$CREATE_OUTPUT" | grep "NOTICE" | sed 's/NOTICE:  //'
+        elif echo "$CREATE_OUTPUT" | grep -q "ERROR"; then
+            print_warn "Owner account creation failed:"
+            echo "$CREATE_OUTPUT" | head -5
+        else
+            print_info "Owner setup completed"
+        fi
+    fi
+
+    print_info ""
     print_info "Check status with: $0 logs"
+    print_info ""
+    print_warn "========================================="
+    print_warn "IMPORTANT: First-Time Setup"
+    print_warn "========================================="
+    print_warn "After services are ready, run the configuration script:"
+    print_warn "  ./configure-toolkit.sh"
+    print_warn ""
+    print_warn "This will configure:"
+    print_warn "  - AI models in LiteLLM"
+    print_warn "  - Virtual keys for N8N"
+    print_warn "  - N8N credentials"
+    print_warn "========================================="
 }
 
 # Function to stop services

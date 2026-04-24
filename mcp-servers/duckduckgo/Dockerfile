@@ -2,6 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Install system dependencies (wget for healthcheck)
+RUN apk add --no-cache wget
+
 # Install dependencies
 RUN npm install -g express body-parser
 

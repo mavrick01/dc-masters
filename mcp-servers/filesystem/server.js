@@ -14,7 +14,31 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: 'mcp-filesystem' });
 });
 
-// MCP endpoint
+// MCP SSE endpoint (for streaming/session)
+app.get('/mcp', (req, res) => {
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*'
+  });
+
+  // Send initial connection event
+  res.write('event: open\n');
+  res.write('data: {"jsonrpc":"2.0","method":"notifications/initialized","params":{}}\n\n');
+
+  // Keep connection alive with heartbeat
+  const heartbeat = setInterval(() => {
+    res.write(': heartbeat\n\n');
+  }, 30000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+  });
+});
+
+// MCP POST endpoint (for request-response)
 app.post('/mcp', async (req, res) => {
   const { jsonrpc, method, params, id } = req.body;
 
