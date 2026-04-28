@@ -109,7 +109,7 @@ services:
       - SSL_CERT_FILE=${SSL_CERT_FILE}
       - HTTP_PROXY=${HTTP_PROXY}
       - HTTPS_PROXY=${HTTPS_PROXY}
-      - NO_PROXY=${NO_PROXY:-postgres,litellm,mcp-filesystem,mcp-duckduckgo}
+      - NO_PROXY=${NO_PROXY:-postgres,litellm,mcp-filesystem,mcp-duckduckgo,searxng}
       # LiteLLM integration settings
       # Runner configuration for n8n Workflows - using external mode to run in the same container but with better isolation and security controls, and to allow future flexibility to move to separate runner containers if needed
       - N8N_RUNNERS_MODE=internal
@@ -133,6 +133,29 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
+
+  # SearXNG Meta Search Engine
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    container_name: dc-masters-searxng
+    environment:
+      - SEARXNG_BASE_URL=http://host.docker.internal/
+      - UWSGI_WORKERS=4
+      - UWSGI_THREADS=4
+    volumes:
+      - ./config/searxng:/etc/searxng:ro,Z
+      - ./data/searxng:/var/lib/searxng:rw,Z
+    ports:
+      - "8080:8080"
+    networks:
+      - toolkit-network
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
     restart: unless-stopped
 
 networks:

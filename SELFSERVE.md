@@ -14,6 +14,7 @@ Complete manual setup guide with GUI-based configuration instructions. This guid
 6. [GUI-Based Configuration](#gui-based-configuration)
 7. [Manual Workflow Configuration](#manual-workflow-configuration)
 8. [GUI-Based Testing and Verification](#gui-based-testing-and-verification)
+9. [Using SearXNG Search Engine](#using-searxng-search-engine)
 
 ---
 
@@ -284,6 +285,7 @@ docker compose ps
 # dc-masters-postgres   Up
 # dc-masters-litellm    Up
 # dc-masters-n8n        Up
+# dc-masters-searxng    Up
 ```
 
 **For Podman:**
@@ -322,13 +324,25 @@ echo "✓ Database should be ready"
 
 ```bash
 # For Docker:
-docker exec -i dc-masters-postgres psql -U dcmasters -d n8n -f - < config/n8n/create-owner.sql
+docker exec -i dc-masters-postgres psql -U dcmasters -d n8n \
+  -v owner_email="${N8N_OWNER_EMAIL:-admin@dcmasters.local}" \
+  -v owner_password="${N8N_OWNER_PASSWORD:-changeme123}" \
+  -v owner_first_name="${N8N_OWNER_FIRST_NAME:-Admin}" \
+  -v owner_last_name="${N8N_OWNER_LAST_NAME:-User}" \
+  -f - < config/n8n/create-owner.sql
 
 # For Podman:
-podman exec -i dc-masters-postgres psql -U dcmasters -d n8n -f - < config/n8n/create-owner.sql
+podman exec -i dc-masters-postgres psql -U dcmasters -d n8n \
+  -v owner_email="${N8N_OWNER_EMAIL:-admin@dcmasters.local}" \
+  -v owner_password="${N8N_OWNER_PASSWORD:-changeme123}" \
+  -v owner_first_name="${N8N_OWNER_FIRST_NAME:-Admin}" \
+  -v owner_last_name="${N8N_OWNER_LAST_NAME:-User}" \
+  -f - < config/n8n/create-owner.sql
 
 echo "✓ N8N owner account created"
 ```
+
+**Note:** The `-v` flags pass environment variables to the SQL script. These will use values from your `.env` file (loaded in Step 4), or fall back to the defaults shown.
 
 **What this does:**
 - Runs SQL script to create N8N owner account
@@ -351,6 +365,7 @@ podman compose ps
 **Access the UIs:**
 - LiteLLM: http://localhost:4000
 - N8N: http://localhost:5678
+- SearXNG: http://localhost:8080
 - PostgreSQL: `psql -h localhost -U dcmasters -d litellm`
 
 ---
@@ -528,28 +543,31 @@ MCP (Model Context Protocol) servers provide tools for AI models.
 1. **Navigate to MCP Servers** in LiteLLM UI (left sidebar)
 2. **Click "Add MCP Server"**
 
-#### Brave Search MCP Server
+#### SearXNG Search MCP Server
 
 **Configuration:**
-- **Name**: `brave_search`
+- **Name**: `searxng`
 - **Transport**: `stdio`
 - **Command**: `npx`
 - **Arguments**: Add each argument separately:
   1. Click "Add Argument" → Enter: `-y`
-  2. Click "Add Argument" → Enter: `@modelcontextprotocol/server-brave-search`
+  2. Click "Add Argument" → Enter: `mcp-searxng`
 - **Environment Variables**:
   - Click "Add Environment Variable"
-  - Key: `BRAVE_API_KEY`
-  - Value: (your Brave API key - get from https://brave.com/search/api/)
-  - If behind firewall, add another variable:
-    - Key: `NODE_TLS_REJECT_UNAUTHORIZED`
-    - Value: `0`
+  - Key: `SEARXNG_URL`
+  - Value: `http://searxng:8080`
+- **Access Control**:
+  - Look for "Allow All Keys" or similar setting
+  - **Enable it** (set to `true`) to allow virtual keys to access this MCP server
+  - This allows N8N workflows using virtual keys to use the search functionality
 - Click **Save** or **Create**
 
 **What this does:**
 - Enables web search capability for AI models
-- Uses Brave Search API (privacy-focused)
-- Requires Brave API key (free tier available)
+- Uses your local SearXNG instance (privacy-focused)
+- No API key required - uses the SearXNG container
+- Supports DuckDuckGo and other search engines configured in SearXNG
+- **Accessible via virtual keys** - N8N workflows can use it without the master key
 
 #### Filesystem MCP Server
 
@@ -561,12 +579,16 @@ MCP (Model Context Protocol) servers provide tools for AI models.
   1. Click "Add Argument" → Enter: `-y`
   2. Click "Add Argument" → Enter: `@modelcontextprotocol/server-filesystem`
   3. Click "Add Argument" → Enter: `/projects`
+- **Access Control**:
+  - Look for "Allow All Keys" or similar setting
+  - **Enable it** (set to `true`) to allow virtual keys to access this MCP server
 - Click **Save** or **Create**
 
 **What this does:**
 - Allows AI models to read/write files
 - Restricted to `/projects` directory inside container
 - Useful for code analysis and file operations
+- **Accessible via virtual keys** - N8N workflows can use it
 
 ### 6.4 - Create LiteLLM Virtual Key via UI
 
@@ -698,14 +720,35 @@ N8N needs to authenticate with LiteLLM using the virtual key you created.
      - Make sure to include "Bearer " prefix!
 5. **Click "Save"**
 
+#### Credential 5: LiteLLM API Bearer Token
+
+This credential is used specifically for MCP server access. It's the same key as Credential 4 but in Bearer token format.
+
+1. **Click "Add Credential"** button
+2. **Search** for "HTTP Header Auth"
+3. **Select** "HTTP Header Auth" from results
+4. **Configure**:
+   - **Credential Name**: `LiteLLM API Bearer Token`
+   - **Header Name**: `Authorization`
+   - **Header Value**: `Bearer sk-your-virtual-key-here`
+     - Use the same virtual key from Step 6.4
+     - **⚠️ Important**: Include the "Bearer " prefix!
+5. **Click "Save"**
+
+**What this is for:**
+- Used when N8N workflows need to access LiteLLM's MCP servers
+- Enables AI agents to use tools like SearXNG search and filesystem operations
+- Same key as Credential 4, just different credential type format
+
 #### Verify All Credentials
 
 1. **Navigate to Settings → Credentials**
-2. **Verify 4 credentials** are listed:
+2. **Verify 5 credentials** are listed:
    - ✅ Google Cloud - Vertex AI
    - ✅ PostgreSQL - Embeddings DB
    - ✅ PostgreSQL - AIRS DB
    - ✅ LiteLLM API
+   - ✅ LiteLLM API Bearer Token
 3. **Test each credential**:
    - Click on credential name
    - Click **"Test"** button
@@ -1077,13 +1120,193 @@ psql -h localhost -U dcmasters -d airs_embedding \
 
 ---
 
+## Using SearXNG Search Engine
+
+SearXNG is a privacy-respecting metasearch engine that's included in the toolkit. It provides an alternative to commercial search APIs while maintaining user privacy.
+
+### Accessing SearXNG
+
+Once your services are running, access SearXNG at:
+
+**Web Interface**: http://localhost:8080
+
+### Using the Web Interface
+
+1. **Open** http://localhost:8080 in your browser
+2. **Enter a search query** in the search box
+3. **Press Enter** or click Search
+4. **View results** from DuckDuckGo (and other engines if configured)
+
+**Features:**
+- Privacy-focused (no tracking, no logging)
+- Clean, simple interface
+- No ads or sponsored results
+- Configurable search engines
+
+### Using the JSON API
+
+SearXNG provides a JSON API for programmatic access:
+
+```bash
+# Basic search
+curl "http://localhost:8080/search?q=artificial+intelligence&format=json"
+
+# With category filter
+curl "http://localhost:8080/search?q=cybersecurity&format=json&categories=general"
+
+# Limit results
+curl "http://localhost:8080/search?q=machine+learning&format=json&pageno=1"
+```
+
+**Response format:**
+```json
+{
+  "query": "artificial intelligence",
+  "number_of_results": 10,
+  "results": [
+    {
+      "title": "...",
+      "url": "...",
+      "content": "...",
+      "engine": "duckduckgo"
+    }
+  ]
+}
+```
+
+### Integrating with N8N Workflows
+
+You can use SearXNG in your N8N workflows for AI-powered research:
+
+1. **Add HTTP Request Node** to your workflow
+2. **Configure the node**:
+   - **Method**: GET
+   - **URL**: `http://searxng:8080/search`
+   - **Query Parameters**:
+     - `q`: `{{ $json.query }}` (your search query)
+     - `format`: `json`
+3. **Process results** in subsequent nodes
+
+**Example use cases:**
+- Research agent workflows
+- Fact-checking and verification
+- Context gathering for RAG
+- Automated news monitoring
+
+### Customizing Search Engines
+
+To enable additional search engines beyond DuckDuckGo:
+
+1. **Edit** the settings file:
+   ```bash
+   nano config/searxng/settings.yml
+   ```
+
+2. **Uncomment engines** you want to enable:
+   ```yaml
+   engines:
+     # Enable Google
+     - name: google
+       engine: google
+       shortcut: go
+       disabled: false  # Change from true to false
+
+     # Enable Wikipedia
+     - name: wikipedia
+       engine: wikipedia
+       shortcut: wp
+       disabled: false
+   ```
+
+3. **Restart SearXNG**:
+   ```bash
+   docker restart dc-masters-searxng
+   # OR
+   podman restart dc-masters-searxng
+   ```
+
+### Available Search Engines
+
+Common engines you can enable in `settings.yml`:
+
+| Engine | Purpose | Notes |
+|--------|---------|-------|
+| `duckduckgo` | General search | Enabled by default, privacy-focused |
+| `google` | General search | Requires direct internet access |
+| `bing` | General search | Microsoft's search engine |
+| `wikipedia` | Encyclopedia | Great for facts and definitions |
+| `github` | Code search | Search repositories and code |
+| `stackoverflow` | Programming Q&A | Tech questions and answers |
+| `arxiv` | Scientific papers | Academic research papers |
+
+See [SearXNG documentation](https://docs.searxng.org/admin/engines/configured_engines.html) for full list.
+
+### Corporate Firewall Configuration
+
+If behind a corporate firewall, configure proxy in `config/searxng/settings.yml`:
+
+```yaml
+outgoing:
+  proxies:
+    http: http://proxy.company.com:8080
+    https: http://proxy.company.com:8080
+```
+
+Then restart the service.
+
+### Troubleshooting SearXNG
+
+**Container won't start:**
+```bash
+# Check logs
+docker logs dc-masters-searxng
+# OR
+podman logs dc-masters-searxng
+```
+
+**No search results:**
+1. Verify internet connectivity from container
+2. Check DNS resolution
+3. Try enabling alternative search engines
+4. If behind firewall, configure proxy settings
+
+**Slow responses:**
+1. Increase timeout in `settings.yml`:
+   ```yaml
+   outgoing:
+     request_timeout: 5.0  # Increase from 3.0
+   ```
+2. Reduce number of enabled engines
+3. Check network latency
+
+### Security Note
+
+The default configuration uses a placeholder secret key. For production deployments:
+
+1. **Generate a random key**:
+   ```bash
+   openssl rand -hex 32
+   ```
+
+2. **Update** `config/searxng/settings.yml`:
+   ```yaml
+   server:
+     secret_key: "your-generated-key-here"
+   ```
+
+3. **Restart** the service
+
+For more configuration options, see `config/searxng/README.md`.
+
+---
+
 ## Summary
 
 You've now completed the full manual setup! You should have:
 
 ✅ Configured all environment variables  
 ✅ Set up corporate certificates (if needed)  
-✅ Manually started all services  
+✅ Manually started all services (PostgreSQL, LiteLLM, N8N, SearXNG)  
 ✅ Applied database fix  
 ✅ Configured LiteLLM models via GUI  
 ✅ Configured MCP servers via GUI  
@@ -1093,6 +1316,7 @@ You've now completed the full manual setup! You should have:
 ✅ Assigned credentials to workflows  
 ✅ Activated workflows  
 ✅ Tested RAG functionality via GUI  
+✅ Verified SearXNG search engine is accessible  
 
 For troubleshooting, see [QUICKSTART.md](QUICKSTART.md) or [README.md](README.md).
 

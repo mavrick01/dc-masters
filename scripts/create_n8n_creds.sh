@@ -128,6 +128,15 @@ if [ -n "$LITELLM_VIRTUAL_KEY" ]; then
             \"url\": \"http://litellm:4000\",
             \"apiKey\": \"$LITELLM_VIRTUAL_KEY\"
         }"
+
+    # Create LiteLLM Bearer Token credential for MCP server access
+    create_credential \
+        "LiteLLM API Bearer Token" \
+        "httpHeaderAuth" \
+        "{
+            \"name\": \"Authorization\",
+            \"value\": \"Bearer $LITELLM_VIRTUAL_KEY\"
+        }"
 else
     print_warn "LITELLM_VIRTUAL_KEY not set - skipping LiteLLM credential creation"
     print_info "Run: export LITELLM_VIRTUAL_KEY=\$(scripts/create_virtual_key.sh)"

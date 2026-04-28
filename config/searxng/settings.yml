@@ -1,0 +1,92 @@
+# SearXNG Configuration
+# Privacy-respecting metasearch engine
+# Documentation: https://docs.searxng.org/
+
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "DC-Masters SearXNG"
+  privacypolicy_url: false
+  donation_url: false
+  contact_url: false
+  enable_metrics: false
+
+search:
+  safe_search: 0  # 0=off, 1=moderate, 2=strict
+  autocomplete: "duckduckgo"
+  default_lang: "en"
+  formats:
+    - html
+    - json
+
+server:
+  # Number of workers and threads set via environment variables
+  # UWSGI_WORKERS and UWSGI_THREADS in compose.yaml
+  secret_key: "changeme_to_random_string"  # Change in production!
+  limiter: false  # Disable rate limiting for internal use
+  image_proxy: true
+
+ui:
+  static_use_hash: true
+  default_theme: simple
+  default_locale: en
+  query_in_title: true
+  infinite_scroll: false
+  center_alignment: false
+
+# Enabled search engines
+engines:
+  # DuckDuckGo - Privacy-focused search
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false
+    timeout: 3.0
+
+  # Additional recommended engines (disabled by default)
+  # Uncomment to enable:
+
+  # - name: google
+  #   engine: google
+  #   shortcut: go
+  #   disabled: true
+
+  # - name: bing
+  #   engine: bing
+  #   shortcut: bi
+  #   disabled: true
+
+  # - name: wikipedia
+  #   engine: wikipedia
+  #   shortcut: wp
+  #   disabled: false
+
+  # - name: github
+  #   engine: github
+  #   shortcut: gh
+  #   disabled: false
+
+# Disable engines from default settings that might cause issues
+disabled_engines:
+  - 'google images'
+  - 'google news'
+  - 'google videos'
+  - 'google scholar'
+  - 'bing images'
+  - 'bing news'
+  - 'bing videos'
+
+# Outgoing request configuration
+outgoing:
+  request_timeout: 3.0  # seconds
+  max_request_timeout: 10.0
+  useragent_suffix: ""
+  pool_connections: 100
+  pool_maxsize: 10
+  enable_http2: true
+
+  # Uncomment for proxy support (corporate firewall)
+  # proxies:
+  #   http: http://proxy.example.com:8080
+  #   https: http://proxy.example.com:8080

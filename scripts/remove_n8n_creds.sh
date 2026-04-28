@@ -34,6 +34,7 @@ CREDENTIAL_NAMES=(
     "PostgreSQL - Embeddings DB"
     "PostgreSQL - AIRS DB"
     "LiteLLM API"
+    "LiteLLM API Bearer Token"
 )
 
 print_info "Fetching credentials from N8N..."

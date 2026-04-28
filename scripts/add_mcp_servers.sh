@@ -86,7 +86,8 @@ body = {
     'transport': 'http',
     'auth_type': server.get('auth_type', 'none'),
     'available_on_public_internet': server.get('available_on_public_internet', False),
-    'alias': server.get('alias', '')
+    'alias': server.get('alias', ''),
+    'allow_all_keys': server.get('allow_all_keys', False)
 }
 print(json.dumps(body))
 ")
@@ -100,7 +101,8 @@ body = {
     'transport': 'stdio',
     'command': server['command'],
     'args': server.get('args', []),
-    'env': server.get('env', {})
+    'env': server.get('env', {}),
+    'allow_all_keys': server.get('allow_all_keys', False)
 }
 if 'alias' in server:
     body['alias'] = server['alias']

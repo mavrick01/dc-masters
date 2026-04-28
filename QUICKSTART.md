@@ -45,10 +45,11 @@ Ensure these ports are available:
 - `4000` - LiteLLM API
 - `5432` - PostgreSQL
 - `5678` - N8N
+- `8080` - SearXNG (privacy-focused metasearch)
 
 Check port availability:
 ```bash
-lsof -i :4000 :5432 :5678
+lsof -i :4000 :5432 :5678 :8080
 # Should show no results
 ```
 
@@ -173,6 +174,7 @@ For detailed troubleshooting, see [CORPORATE_FIREWALL.md](CORPORATE_FIREWALL.md)
 # dc-masters-postgres   Up
 # dc-masters-litellm    Up
 # dc-masters-n8n        Up
+# dc-masters-searxng    Up
 ```
 
 ### Access URLs
@@ -183,6 +185,8 @@ Once services are running, you can access:
   - Login: `admin@dcmasters.local` / `changeme123`
 - **N8N Workflow Automation**: http://localhost:5678
   - Login: `admin@dcmasters.local` / `changeme123`
+- **SearXNG Search Engine**: http://localhost:8080
+  - Privacy-focused metasearch (no login required)
 - **PostgreSQL Database**: `localhost:5432`
   - User: `dcmasters` / Password: `changeme123`
 
@@ -226,7 +230,7 @@ For manual database fix steps, see [SELFSERVE.md](SELFSERVE.md).
 1. Waits for services to be ready
 2. Creates temporary N8N API key
 3. Configures LiteLLM models from `config.yaml`
-4. Configures MCP servers (Brave Search, Filesystem)
+4. Configures MCP servers (SearXNG Search, Filesystem)
 5. Creates LiteLLM virtual key for N8N
 6. Creates N8N credentials (Google Cloud, PostgreSQL, LiteLLM)
 7. Imports all 5 N8N workflows
@@ -509,6 +513,7 @@ psql -h localhost -U dcmasters -l
 |---------|------|---------|--------------|
 | **LiteLLM API** | 4000 | AI gateway and model proxy | UI: `admin@dcmasters.local` / `changeme123` |
 | **N8N** | 5678 | Workflow automation platform | `admin@dcmasters.local` / `changeme123` |
+| **SearXNG** | 8080 | Privacy-focused metasearch engine | No login required |
 | **PostgreSQL** | 5432 | Database (4 databases: litellm, n8n, embeddings, airs_embedding) | `dcmasters` / `changeme123` |
 
 ### Table 3: Workflows Overview

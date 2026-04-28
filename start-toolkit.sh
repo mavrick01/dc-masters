@@ -116,8 +116,7 @@ start_services() {
     print_info "  - LiteLLM API: http://localhost:4000"
     print_info "  - N8N UI: http://localhost:5678"
     print_info "  - PostgreSQL: localhost:5432"
-    print_info "  - MCP Filesystem: http://localhost:8000"
-    print_info "  - MCP DuckDuckGo: http://localhost:8001"
+    print_info "  - Searxng: http://localhost:8080"
     print_info ""
     print_info "Default credentials (change in .env):"
     print_info "  - N8N UI: ${N8N_OWNER_EMAIL:-admin@dcmasters.local} / ${N8N_OWNER_PASSWORD:-changeme123}"
@@ -151,8 +150,13 @@ start_services() {
         # Create N8N owner account using SQL script
         print_info "Creating N8N owner account..."
 
-        # Run SQL script in PostgreSQL container
-        CREATE_OUTPUT=$($RUNTIME exec -i dc-masters-postgres psql -U dcmasters -d n8n -f - < config/n8n/create-owner.sql 2>&1)
+        # Run SQL script in PostgreSQL container with environment variables
+        CREATE_OUTPUT=$($RUNTIME exec -i dc-masters-postgres psql -U dcmasters -d n8n \
+            -v owner_email="${N8N_OWNER_EMAIL:-admin@dcmasters.local}" \
+            -v owner_password="${N8N_OWNER_PASSWORD:-changeme123}" \
+            -v owner_first_name="${N8N_OWNER_FIRST_NAME:-Admin}" \
+            -v owner_last_name="${N8N_OWNER_LAST_NAME:-User}" \
+            -f - < config/n8n/create-owner.sql 2>&1)
 
         if echo "$CREATE_OUTPUT" | grep -q "NOTICE.*N8N Setup"; then
             echo "$CREATE_OUTPUT" | grep "NOTICE" | sed 's/NOTICE:  //'

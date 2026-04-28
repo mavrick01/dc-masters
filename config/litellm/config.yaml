@@ -59,15 +59,15 @@ model_list:
 # MCP Server Configuration
 mcp_servers:
   # Stdio-based MCP Servers (npx command-based)
-  - name: brave_search
+  - name: searxng
     transport: stdio
     command: npx
     args:
       - "-y"
-      - "@modelcontextprotocol/server-brave-search"
+      - "mcp-searxng"
     env:
-      BRAVE_API_KEY: "${BRAVE_API_KEY}"  # Will be substituted from .env
-      NODE_TLS_REJECT_UNAUTHORIZED: "${NODE_TLS_REJECT_UNAUTHORIZED:-0}"
+      SEARXNG_URL: "http://searxng:8080"
+    allow_all_keys: true  # Allow virtual keys to access this MCP server
 
   - name: filesystem_stdio
     transport: stdio
@@ -76,6 +76,7 @@ mcp_servers:
       - "-y"
       - "@modelcontextprotocol/server-filesystem"
       - "/projects"
+    allow_all_keys: true  # Allow virtual keys to access this MCP server
 
 # Logging configuration
 litellm_settings:
