@@ -44,6 +44,16 @@ engines:
     disabled: false
     timeout: 3.0
 
+  # Explicitly disable problematic engines
+  - name: ahmia
+    disabled: true
+
+  - name: torch
+    disabled: true
+
+  - name: wikidata
+    disabled: true
+
   # Additional recommended engines (disabled by default)
   # Uncomment to enable:
 
@@ -76,6 +86,11 @@ disabled_engines:
   - 'bing images'
   - 'bing news'
   - 'bing videos'
+  # Disable Tor-based engines (require Tor network)
+  - 'ahmia'
+  - 'torch'
+  # Disable wikidata (API format incompatibility)
+  - 'wikidata'
 
 # Outgoing request configuration
 outgoing:

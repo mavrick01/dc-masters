@@ -29,10 +29,9 @@ A comprehensive containerized toolkit for DC-Masters students to learn and demon
 │       └───┼────────┐                                           │
 │           │        │                                            │
 │  ┌────────┴────────┴─────────────────────────────┐            │
-│  │ MCP Servers (HTTP/Streamable transport)       │            │
+│  │ MCP Servers (HTTP transport)                  │            │
 │  ├────────────────────────────────────────────────┤            │
-│  │  • Filesystem :8000 (sandbox r/w access)      │            │
-│  │  • DuckDuckGo :8001 (search + URL fetch)      │            │
+│  │  • SearXNG :8081 (web search)                 │            │
 │  └────────────────────────────────────────────────┘            │
 │                                                                 │
 │  Pre-configured N8N Workflows:                                 │
@@ -50,8 +49,8 @@ A comprehensive containerized toolkit for DC-Masters students to learn and demon
 - **LiteLLM**: Unified AI gateway supporting Azure OpenAI (GPT), AWS Bedrock (Claude), and Vertex AI (Gemini)
 - **N8N**: Low-code workflow automation with 5 pre-built AI workflows
 - **PostgreSQL + pgvector**: Vector database for semantic search and RAG
-- **MCP Filesystem Server**: Sandboxed file operations for AI agents
-- **MCP DuckDuckGo Server**: Web search and URL content fetching
+- **SearXNG**: Privacy-focused metasearch engine (DuckDuckGo, etc.)
+- **MCP SearXNG Server**: Web search capability for AI models via Model Context Protocol
 
 ## Prerequisites
 
@@ -67,7 +66,10 @@ If you're behind a corporate firewall with SSL inspection or proxy requirements,
 
 **Quick fix**: Add to your `.env` file:
 ```bash
-NODE_TLS_REJECT_UNAUTHORIZED=0
+DC_NODE_TLS_REJECT_UNAUTHORIZED=0
+DC_REQUESTS_CA_BUNDLE=/app/certs/company-ca.pem
+DC_CURL_CA_BUNDLE=/app/certs/company-ca.pem
+DC_SSL_CERT_FILE=/app/certs/company-ca.pem
 HTTP_PROXY=http://your-proxy:8080
 HTTPS_PROXY=http://your-proxy:8080
 ```
@@ -137,6 +139,8 @@ This removes all models, virtual keys, credentials, and workflows, allowing you 
   - Username: `admin` (or your configured value)
   - Password: `changeme123` (or your configured value)
 - **LiteLLM API**: http://localhost:4000
+- **SearXNG**: http://localhost:8080 (search engine web interface)
+- **MCP SearXNG Server**: http://localhost:8081 (MCP HTTP endpoint)
 - **PostgreSQL**: `localhost:5432`
 
 ### 4. Configure N8N Workflows
@@ -257,13 +261,13 @@ curl -X POST http://localhost:5678/webhook/airs-chatbot \
 Test MCP servers directly:
 
 ```bash
-# List filesystem tools
-curl -X POST http://localhost:8000/mcp \
+# List available tools
+curl -X POST http://localhost:8081/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 
 # Search the web
-curl -X POST http://localhost:8001/mcp \
+curl -X POST http://localhost:8081/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search","arguments":{"query":"AI safety"}},"id":1}'
 ```

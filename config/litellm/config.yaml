@@ -58,24 +58,10 @@ model_list:
 
 # MCP Server Configuration
 mcp_servers:
-  # Stdio-based MCP Servers (npx command-based)
+  # HTTP-based MCP Server (running as separate container)
   - name: searxng
-    transport: stdio
-    command: npx
-    args:
-      - "-y"
-      - "mcp-searxng"
-    env:
-      SEARXNG_URL: "http://searxng:8080"
-    allow_all_keys: true  # Allow virtual keys to access this MCP server
-
-  - name: filesystem_stdio
-    transport: stdio
-    command: npx
-    args:
-      - "-y"
-      - "@modelcontextprotocol/server-filesystem"
-      - "/projects"
+    transport: http
+    url: "http://mcp-searxng:8081/mcp"
     allow_all_keys: true  # Allow virtual keys to access this MCP server
 
 # Logging configuration

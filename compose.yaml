@@ -28,7 +28,7 @@ services:
 
   # LiteLLM AI Gateway
   litellm:
-    image: ghcr.io/berriai/litellm:main-latest
+    image: ghcr.io/berriai/litellm:main-stable
     container_name: dc-masters-litellm
     environment:
       - DATABASE_URL=${DATABASE_URL}
@@ -48,18 +48,17 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS="/app/credentials/google_credentials.json"
       # Corporate firewall / SSL settings
       - SSL_VERIFY=${SSL_VERIFY:-true}
-      - REQUESTS_CA_BUNDLE=${REQUESTS_CA_BUNDLE}
-      - CURL_CA_BUNDLE=${CURL_CA_BUNDLE}
-      - SSL_CERT_FILE=${SSL_CERT_FILE}
-      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED}
+      - REQUESTS_CA_BUNDLE=${DC_REQUESTS_CA_BUNDLE:-/app/certs/company-ca.pem}
+      - CURL_CA_BUNDLE=${DC_CURL_CA_BUNDLE:-/app/certs/company-ca.pem}
+      - SSL_CERT_FILE=${DC_SSL_CERT_FILE:-/app/certs/company-ca.pem}
+      - NODE_TLS_REJECT_UNAUTHORIZED=${DC_NODE_TLS_REJECT_UNAUTHORIZED}
       - HTTP_PROXY=${HTTP_PROXY}
       - HTTPS_PROXY=${HTTPS_PROXY}
-      - NO_PROXY=${NO_PROXY}
+      - NO_PROXY=${NO_PROXY:-postgres,mcp-searxng,searxng}
       - LITELLM_DROP_PARAMS=True
     volumes:
       - ./credentials:/app/credentials:ro,Z
       - ./certs:/app/certs:ro,Z
-      - ./data/litellm/projects:/projects:Z
     ports:
       - "4000:4000"
     networks:
@@ -104,12 +103,12 @@ services:
       - GCP_PROJECT_ID=${GCP_PROJECT_ID}
       - GCP_REGION=${GCP_REGION}
       # Corporate firewall / SSL settings
-      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED}
-      - NODE_EXTRA_CA_CERTS=/app/certs/company-ca.pem
-      - SSL_CERT_FILE=${SSL_CERT_FILE}
+      - NODE_TLS_REJECT_UNAUTHORIZED=${DC_NODE_TLS_REJECT_UNAUTHORIZED}
+      - NODE_EXTRA_CA_CERTS=${DC_NODE_EXTRA_CA_CERTS:-/app/certs/company-ca.pem}
+      - SSL_CERT_FILE=${DC_SSL_CERT_FILE:-/app/certs/company-ca.pem}
       - HTTP_PROXY=${HTTP_PROXY}
       - HTTPS_PROXY=${HTTPS_PROXY}
-      - NO_PROXY=${NO_PROXY:-postgres,litellm,mcp-filesystem,mcp-duckduckgo,searxng}
+      - NO_PROXY=${NO_PROXY:-postgres,litellm,mcp-searxng,searxng}
       # LiteLLM integration settings
       # Runner configuration for n8n Workflows - using external mode to run in the same container but with better isolation and security controls, and to allow future flexibility to move to separate runner containers if needed
       - N8N_RUNNERS_MODE=internal
@@ -143,9 +142,17 @@ services:
       - SEARXNG_BASE_URL=http://host.docker.internal/
       - UWSGI_WORKERS=4
       - UWSGI_THREADS=4
+      # Corporate firewall / SSL settings
+      - REQUESTS_CA_BUNDLE=/etc/searxng/certs/company-ca.pem
+      - SSL_CERT_FILE=/etc/searxng/certs/company-ca.pem
+      - CURL_CA_BUNDLE=/etc/searxng/certs/company-ca.pem
+      - HTTP_PROXY=${HTTP_PROXY}
+      - HTTPS_PROXY=${HTTPS_PROXY}
+      - NO_PROXY=${NO_PROXY:-postgres,litellm,mcp-searxng}
     volumes:
       - ./config/searxng:/etc/searxng:ro,Z
       - ./data/searxng:/var/lib/searxng:rw,Z
+      - ./certs:/etc/searxng/certs:ro,Z
     ports:
       - "8080:8080"
     networks:
@@ -156,6 +163,31 @@ services:
       - CHOWN
       - SETGID
       - SETUID
+    restart: unless-stopped
+
+  # MCP Server - SearXNG Search (HTTP Transport)
+  mcp-searxng:
+    build:
+      context: .
+      dockerfile: mcp-servers/searxng/Dockerfile
+    container_name: dc-masters-mcp-searxng
+    environment:
+      - SEARXNG_URL=http://searxng:8080
+      - MCP_HTTP_PORT=8081
+      # Corporate firewall / SSL settings
+      - NODE_TLS_REJECT_UNAUTHORIZED=${DC_NODE_TLS_REJECT_UNAUTHORIZED}
+      - NODE_EXTRA_CA_CERTS=${DC_NODE_EXTRA_CA_CERTS:-/app/certs/company-ca.pem}
+      - HTTP_PROXY=${HTTP_PROXY}
+      - HTTPS_PROXY=${HTTPS_PROXY}
+      - NO_PROXY=${NO_PROXY:-postgres,litellm,searxng}
+    volumes:
+      - ./certs:/app/certs:ro,Z
+    ports:
+      - "8081:8081"
+    networks:
+      - toolkit-network
+    depends_on:
+      - searxng
     restart: unless-stopped
 
 networks:

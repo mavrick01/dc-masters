@@ -141,14 +141,20 @@ AWS_REGION_NAME=us-east-1
 ### Corporate Proxy/Firewall Settings
 
 ```bash
+# Custom CA certificate bundle (path inside container)
+DC_REQUESTS_CA_BUNDLE=/app/certs/company-ca.pem
+DC_CURL_CA_BUNDLE=/app/certs/company-ca.pem
+DC_NODE_EXTRA_CA_CERTS=/app/certs/company-ca.pem
+DC_SSL_CERT_FILE=/app/certs/company-ca.pem
+
 # Disable SSL verification (only if behind corporate firewall)
-NODE_TLS_REJECT_UNAUTHORIZED=0
+DC_NODE_TLS_REJECT_UNAUTHORIZED=0
 SSL_VERIFY=false
 
 # Proxy settings (if required)
 HTTP_PROXY=http://proxy.company.com:8080
 HTTPS_PROXY=http://proxy.company.com:8080
-NO_PROXY=localhost,127.0.0.1,postgres,litellm,mcp-filesystem,mcp-duckduckgo,n8n
+NO_PROXY=localhost,127.0.0.1,postgres,litellm,mcp-searxng,searxng,n8n
 ```
 
 **When to use:**
@@ -247,16 +253,19 @@ cat credentials/google_credentials.json | jq '.' > /dev/null
 ```bash
 # Only if certs/company-ca.pem exists
 if [ -f "certs/company-ca.pem" ]; then
-  export REQUESTS_CA_BUNDLE=/app/certs/company-ca.pem
-  export CURL_CA_BUNDLE=/app/certs/company-ca.pem
-  export NODE_EXTRA_CA_CERTS=/app/certs/company-ca.pem
-  export SSL_CERT_FILE=/app/certs/company-ca.pem
+  export DC_REQUESTS_CA_BUNDLE=/app/certs/company-ca.pem
+  export DC_CURL_CA_BUNDLE=/app/certs/company-ca.pem
+  export DC_NODE_EXTRA_CA_CERTS=/app/certs/company-ca.pem
+  export DC_SSL_CERT_FILE=/app/certs/company-ca.pem
   
   echo "Corporate CA environment variables set"
 fi
 ```
 
-**Note:** These paths (`/app/certs/...`) are the paths INSIDE the container, not on your host.
+**Note:** 
+- These use `DC_*` prefix to avoid conflicts with host environment variables
+- These paths (`/app/certs/...`) are the paths INSIDE the container, not on your host
+- SearXNG uses hardcoded certificate paths in compose.yaml
 
 ### Step 4: Load Environment Variables
 
@@ -547,15 +556,8 @@ MCP (Model Context Protocol) servers provide tools for AI models.
 
 **Configuration:**
 - **Name**: `searxng`
-- **Transport**: `stdio`
-- **Command**: `npx`
-- **Arguments**: Add each argument separately:
-  1. Click "Add Argument" → Enter: `-y`
-  2. Click "Add Argument" → Enter: `mcp-searxng`
-- **Environment Variables**:
-  - Click "Add Environment Variable"
-  - Key: `SEARXNG_URL`
-  - Value: `http://searxng:8080`
+- **Transport**: `http`
+- **URL**: `http://mcp-searxng:8081`
 - **Access Control**:
   - Look for "Allow All Keys" or similar setting
   - **Enable it** (set to `true`) to allow virtual keys to access this MCP server
@@ -564,31 +566,16 @@ MCP (Model Context Protocol) servers provide tools for AI models.
 
 **What this does:**
 - Enables web search capability for AI models
-- Uses your local SearXNG instance (privacy-focused)
+- Uses your local SearXNG instance (privacy-focused metasearch)
+- Runs as a separate HTTP container (mcp-searxng on port 8081)
 - No API key required - uses the SearXNG container
 - Supports DuckDuckGo and other search engines configured in SearXNG
 - **Accessible via virtual keys** - N8N workflows can use it without the master key
 
-#### Filesystem MCP Server
-
-**Configuration:**
-- **Name**: `filesystem_stdio`
-- **Transport**: `stdio`
-- **Command**: `npx`
-- **Arguments**: Add each argument separately:
-  1. Click "Add Argument" → Enter: `-y`
-  2. Click "Add Argument" → Enter: `@modelcontextprotocol/server-filesystem`
-  3. Click "Add Argument" → Enter: `/projects`
-- **Access Control**:
-  - Look for "Allow All Keys" or similar setting
-  - **Enable it** (set to `true`) to allow virtual keys to access this MCP server
-- Click **Save** or **Create**
-
-**What this does:**
-- Allows AI models to read/write files
-- Restricted to `/projects` directory inside container
-- Useful for code analysis and file operations
-- **Accessible via virtual keys** - N8N workflows can use it
+**Why HTTP transport?**
+- Latest LiteLLM containers don't include Node.js/npm
+- HTTP transport is more reliable and easier to debug
+- Each MCP server runs as an isolated container with its own health check
 
 ### 6.4 - Create LiteLLM Virtual Key via UI
 

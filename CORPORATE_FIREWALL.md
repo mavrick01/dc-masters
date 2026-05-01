@@ -30,17 +30,26 @@ This guide helps you configure the DC-Masters Container Toolkit to work behind c
 **Option A: From IT Department** (Most reliable)
 - Request the root CA certificate in PEM format from your IT team
 
-**Option B: Extract via OpenSSL** (Fastest)
+**Option B: Extract Certificate Chain via OpenSSL** (Fastest) ⚡
+
+This captures the **entire certificate chain** from your corporate SSL inspection proxy:
+
 ```bash
 openssl s_client -connect api.github.com:443 -showcerts < /dev/null 2>/dev/null | awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/' > certs/company-ca.pem
 ```
 
-This captures the certificate chain presented by your corporate SSL inspection proxy. The command:
+**What this does:**
 - Connects to any external HTTPS endpoint (github.com in this example)
-- Captures all certificates in the chain
-- Saves them to `certs/company-ca.pem`
+- Captures **all certificates** in the chain presented by your corporate SSL inspection proxy
+- Saves the complete chain to `certs/company-ca.pem`
+- Works with most corporate firewalls that perform SSL inspection
 
-**Note**: You can use any external HTTPS endpoint instead of `api.github.com` (e.g., `google.com`, `openai.azure.com`).
+**Tip**: You can use any external HTTPS endpoint instead of `api.github.com`:
+- `openssl s_client -connect google.com:443 -showcerts ...`
+- `openssl s_client -connect openai.azure.com:443 -showcerts ...`
+- `openssl s_client -connect cloud.google.com:443 -showcerts ...`
+
+**Why it works**: Corporate SSL inspection proxies intercept HTTPS connections and present their own certificate chain. This command captures that chain, which is what your containers need to trust.
 
 **Option C: Export from macOS Keychain**
 1. Open **Keychain Access**
@@ -79,10 +88,10 @@ You should see:
 
 The `start-toolkit.sh` script automatically:
 - ✅ Detects `certs/company-ca.pem` on startup
-- ✅ Mounts it into LiteLLM and N8N containers at `/app/certs/company-ca.pem`
+- ✅ Mounts it into all containers at `/app/certs/company-ca.pem` or `/etc/searxng/certs/company-ca.pem`
 - ✅ Configures certificate trust for Python (requests, urllib), curl, and Node.js
-- ✅ Sets environment variables: `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`, `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`
-- ✅ Services will trust your corporate SSL inspection certificates
+- ✅ Sets environment variables: `DC_REQUESTS_CA_BUNDLE`, `DC_CURL_CA_BUNDLE`, `DC_NODE_EXTRA_CA_CERTS`, `DC_SSL_CERT_FILE`
+- ✅ All services (LiteLLM, N8N, SearXNG, MCP servers) will trust your corporate SSL inspection certificates
 
 **No manual environment variable configuration needed!** Just place the file and restart.
 
@@ -105,7 +114,7 @@ Add these lines to your `.env` file:
 
 ```bash
 # Disable SSL verification for Node.js applications (N8N, MCP servers)
-NODE_TLS_REJECT_UNAUTHORIZED=0
+DC_NODE_TLS_REJECT_UNAUTHORIZED=0
 
 # Disable SSL verification for Python applications (LiteLLM)
 SSL_VERIFY=false
@@ -158,7 +167,7 @@ HTTPS_PROXY=http://proxy.company.com:8080
 # HTTPS_PROXY=http://username:password@proxy.company.com:8080
 
 # Bypass proxy for internal services
-NO_PROXY=localhost,127.0.0.1,postgres,litellm,mcp-filesystem,mcp-duckduckgo,n8n
+NO_PROXY=localhost,127.0.0.1,postgres,litellm,mcp-searxng,searxng,n8n
 ```
 
 ### Step 3: Configure container runtime to use proxy
@@ -221,12 +230,13 @@ cp /path/to/your-cert.pem certs/company-ca.pem
 # Corporate proxy
 HTTP_PROXY=http://proxy.company.com:8080
 HTTPS_PROXY=http://proxy.company.com:8080
-NO_PROXY=localhost,127.0.0.1,postgres,litellm,mcp-filesystem,mcp-duckduckgo,n8n
+NO_PROXY=localhost,127.0.0.1,postgres,litellm,mcp-searxng,searxng,n8n
 
 # Only if CA certificate alone doesn't work:
-# REQUESTS_CA_BUNDLE=/app/certs/corporate-ca-bundle.crt
-# CURL_CA_BUNDLE=/app/certs/corporate-ca-bundle.crt
-# NODE_EXTRA_CA_CERTS=/app/certs/corporate-ca-bundle.crt
+# DC_REQUESTS_CA_BUNDLE=/app/certs/company-ca.pem
+# DC_CURL_CA_BUNDLE=/app/certs/company-ca.pem
+# DC_NODE_EXTRA_CA_CERTS=/app/certs/company-ca.pem
+# DC_SSL_CERT_FILE=/app/certs/company-ca.pem
 ```
 
 ## Troubleshooting Specific Issues
@@ -262,18 +272,19 @@ sudo update-ca-trust
 
 **Option A**: Disable SSL verification (quick but less secure)
 ```bash
-NODE_TLS_REJECT_UNAUTHORIZED=0
+DC_NODE_TLS_REJECT_UNAUTHORIZED=0
 ```
 
 **Option B**: Use corporate CA bundle
 ```bash
-REQUESTS_CA_BUNDLE=/app/certs/corporate-ca-bundle.crt
+DC_REQUESTS_CA_BUNDLE=/app/certs/company-ca.pem
+DC_CURL_CA_BUNDLE=/app/certs/company-ca.pem
 ```
 
 **Option C**: Use proxy that doesn't inspect Google API traffic
 ```bash
 # Add Google domains to NO_PROXY
-NO_PROXY=localhost,127.0.0.1,*.googleapis.com,*.google.com,postgres,litellm,mcp-filesystem,mcp-duckduckgo
+NO_PROXY=localhost,127.0.0.1,*.googleapis.com,*.google.com,postgres,litellm,mcp-searxng,searxng,n8n
 ```
 
 ### Issue: Azure OpenAI Connection Fails
@@ -295,12 +306,12 @@ NO_PROXY=localhost,127.0.0.1,*.googleapis.com,*.google.com,postgres,litellm,mcp-
 
 2. Or, update environment:
 ```bash
-NODE_TLS_REJECT_UNAUTHORIZED=0
+DC_NODE_TLS_REJECT_UNAUTHORIZED=0
 ```
 
-### Issue: MCP DuckDuckGo Search Fails
+### Issue: SearXNG Search Fails
 
-**Error**: SSL errors or timeouts when searching
+**Error**: SSL errors when SearXNG tries to fetch search results
 
 **Solution**:
 
@@ -310,12 +321,18 @@ HTTP_PROXY=http://proxy.company.com:8080
 HTTPS_PROXY=http://proxy.company.com:8080
 ```
 
-2. Disable SSL verification:
+2. Use corporate CA certificate (recommended):
 ```bash
-NODE_TLS_REJECT_UNAUTHORIZED=0
+# Place certificate in certs/company-ca.pem and restart services
+./start-toolkit.sh restart
 ```
 
-3. Verify DuckDuckGo isn't blocked by your firewall:
+3. Or disable SSL verification (less secure):
+```bash
+DC_NODE_TLS_REJECT_UNAUTHORIZED=0
+```
+
+4. Verify search engines aren't blocked by your firewall:
 ```bash
 curl -I https://duckduckgo.com
 ```
@@ -337,10 +354,10 @@ curl -I https://duckduckgo.com
 3. Test request to: `https://www.google.com`
 4. Should succeed without certificate errors
 
-### Test 3: MCP DuckDuckGo
+### Test 3: MCP SearXNG Server
 
 ```bash
-curl -X POST http://localhost:8001/mcp \
+curl -X POST http://localhost:8081/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search","arguments":{"query":"test"}},"id":1}'
 ```
@@ -422,11 +439,11 @@ When requesting help from your corporate IT team, provide:
 1. Copy `.env.example` to `.env`
 2. Add these lines:
    ```bash
-   NODE_TLS_REJECT_UNAUTHORIZED=0
+   DC_NODE_TLS_REJECT_UNAUTHORIZED=0
    SSL_VERIFY=false
    HTTP_PROXY=http://proxy.company.com:8080  # if using proxy
    HTTPS_PROXY=http://proxy.company.com:8080  # if using proxy
-   NO_PROXY=localhost,127.0.0.1,postgres,litellm,mcp-filesystem,mcp-duckduckgo
+   NO_PROXY=localhost,127.0.0.1,postgres,litellm,mcp-searxng,searxng,n8n
    ```
 3. Restart: `./start-toolkit.sh restart`
 
