@@ -1,9 +1,9 @@
 # Environment variables
 .env
+.claude/
 
 # Data directories
-data/postgres/
-data/n8n/
+data/
 
 # Logs
 *.log
